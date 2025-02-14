@@ -1,0 +1,57 @@
+name: CI/CD PHP avec Deployer
+
+on:
+  push:
+    branches:
+      - main  
+
+jobs:
+  test:
+    name: Tester le code PHP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer PHP et Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv
+
+      - name: Installer les dépendances
+        run: composer install --no-dev --no-progress --no-suggest --prefer-dist --no-interaction
+
+      - name: Lancer les tests PHPUnit
+        run: vendor/bin/phpunit
+
+  deploy:
+    name: Déployer avec Deployer
+    runs-on: ubuntu-latest
+    needs: test  
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer PHP et Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Installer Deployer
+        run: composer global require deployer/deployer
+
+      - name: Configurer SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOYER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.DEPLOYER_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Déployer avec Deployer
+        run: ~/.composer/vendor/bin/dep deploy production
+        env:
+          DEPLOYER_HOST: ${{ secrets.DEPLOYER_HOST }}
